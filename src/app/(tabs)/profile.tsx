@@ -9,6 +9,7 @@ import { useWeight } from '@/hooks/useWeight';
 import { useDiet } from '@/hooks/useDiet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { USER_GOAL_LABELS } from '@/types';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -50,10 +51,13 @@ export default function ProfileScreen() {
     { label: 'Peso inicial', value: `${user?.initialWeight?.toFixed(1) ?? '—'} ${unit}` },
     { label: 'Peso atual', value: stats?.current ? `${stats.current.toFixed(1)} ${unit}` : '—' },
     { label: 'Peso objetivo', value: `${user?.goalWeight?.toFixed(1) ?? '—'} ${unit}` },
-    { label: 'Calorias atuais', value: activeDiet?.calories ? `${activeDiet.calories} kcal` : '—' },
+    { label: 'Altura', value: user?.height ? `${user.height} cm` : '—' },
+    { label: 'Objetivo', value: user?.goal ? USER_GOAL_LABELS[user.goal] : '—' },
+    { label: 'Meta calórica', value: user?.calorieTarget ? `${user.calorieTarget} kcal` : activeDiet?.calories ? `${activeDiet.calories} kcal` : '—' },
   ];
 
   const menuItems: Array<{ icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }> = [
+    { icon: 'restaurant-outline', label: 'Meus Alimentos', onPress: () => router.push('/food') },
     { icon: 'resize-outline', label: 'Medidas corporais', onPress: () => router.push('/measurement/add') },
     { icon: 'nutrition-outline', label: 'Histórico de dietas', onPress: () => router.push('/diet/history') },
     { icon: 'settings-outline', label: 'Configurações', onPress: () => router.push('/settings') },

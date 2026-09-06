@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,6 +69,40 @@ export default function MealDetailScreen() {
     }
   };
 
+  const handleFoodPress = (food: MealFood) => {
+    Alert.alert(
+      food.name,
+      'O que deseja fazer?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Ver detalhes',
+          onPress: () => {
+            if (food.foodId) {
+              router.push(`/food/${food.foodId}`);
+            }
+          },
+        },
+        {
+          text: 'Substituir',
+          onPress: () => {
+            router.push({
+              pathname: '/food/substitute',
+              params: {
+                mealFoodId: food.id,
+                currentName: food.name,
+                currentCalories: food.calories,
+                currentProtein: food.protein,
+                currentCarbs: food.carbs,
+                currentFat: food.fat,
+              },
+            });
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return <LoadingState fullScreen />;
   }
@@ -134,8 +168,10 @@ export default function MealDetailScreen() {
         {/* Foods list */}
         <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['3xl'] }}>
           {meal.foods.map((food) => (
-            <View
+            <TouchableOpacity
               key={food.id}
+              onPress={() => handleFoodPress(food)}
+              activeOpacity={0.7}
               style={[
                 styles.foodRow,
                 {
@@ -155,12 +191,15 @@ export default function MealDetailScreen() {
                   {food.name}
                 </Text>
               </View>
-              {food.calories && (
-                <Text style={[typography.bodySmall, { color: colors.muted }]}>
-                  {food.calories} kcal
-                </Text>
-              )}
-            </View>
+              <View style={styles.foodRight}>
+                {food.calories && (
+                  <Text style={[typography.bodySmall, { color: colors.muted }]}>
+                    {food.calories} kcal
+                  </Text>
+                )}
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} style={{ marginLeft: 4 }} />
+              </View>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -252,6 +291,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  foodRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   nutritionCard: {},
   nutritionMain: {

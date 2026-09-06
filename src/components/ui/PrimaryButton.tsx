@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '@/theme';
 
 interface PrimaryButtonProps {
@@ -8,6 +8,7 @@ interface PrimaryButtonProps {
   loading?: boolean;
   disabled?: boolean;
   variant?: 'filled' | 'outline';
+  style?: ViewStyle;
 }
 
 export function PrimaryButton({
@@ -16,6 +17,7 @@ export function PrimaryButton({
   loading = false,
   disabled = false,
   variant = 'filled',
+  style,
 }: PrimaryButtonProps) {
   const { colors, typography, radius, componentSizes } = useTheme();
 
@@ -43,6 +45,7 @@ export function PrimaryButton({
           borderWidth: isFilled ? 0 : 2,
           borderColor: colors.primary,
         },
+        style,
       ]}
     >
       {loading ? (

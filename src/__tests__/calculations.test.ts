@@ -13,8 +13,16 @@ import {
   formatWeight,
   formatWeightChange,
   formatPercentage,
+  calculateNutritionForQuantity,
+  calculateEquivalentQuantity,
+  calculateMealTotals,
+  calculateDietTotals,
+  calculateBMI,
+  getBMICategory,
+  calculateBMR,
+  formatNutrition,
 } from '../utils/calculations';
-import type { WeightRecord, MealLog } from '../types';
+import type { WeightRecord, MealLog, Food, MealFood } from '../types';
 
 // Helper to create a WeightRecord
 function makeWeight(weight: number, date: string): WeightRecord {
@@ -297,5 +305,200 @@ describe('formatPercentage', () => {
     expect(formatPercentage(85.7)).toBe('86%');
     expect(formatPercentage(100)).toBe('100%');
     expect(formatPercentage(0)).toBe('0%');
+  });
+});
+
+// ==========================================
+// Nutrition Calculations (V2)
+// ==========================================
+
+// Helper to create a Food
+function makeFood(overrides: Partial<Food> = {}): Food {
+  return {
+    id: 1,
+    name: 'Test Food',
+    calories: 100,
+    protein: 20,
+    carbs: 10,
+    fat: 5,
+    defaultUnit: 'g',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+// Helper to create a MealFood
+function makeMealFood(overrides: Partial<MealFood> = {}): MealFood {
+  return {
+    id: 1,
+    mealId: 1,
+    name: 'Test Food',
+    quantity: '100',
+    unit: 'g',
+    calories: 100,
+    protein: 20,
+    carbs: 10,
+    fat: 5,
+    foodId: 1,
+    caloriesSnapshot: 100,
+    proteinSnapshot: 20,
+    carbsSnapshot: 10,
+    fatSnapshot: 5,
+    ...overrides,
+  };
+}
+
+describe('calculateNutritionForQuantity', () => {
+  test('calculates nutrition for 100g (same as base)', () => {
+    const food = makeFood();
+    const result = calculateNutritionForQuantity(food, 100);
+    expect(result.calories).toBe(100);
+    expect(result.protein).toBe(20);
+    expect(result.carbs).toBe(10);
+    expect(result.fat).toBe(5);
+  });
+
+  test('calculates nutrition for 50g (half)', () => {
+    const food = makeFood();
+    const result = calculateNutritionForQuantity(food, 50);
+    expect(result.calories).toBe(50);
+    expect(result.protein).toBe(10);
+    expect(result.carbs).toBe(5);
+    expect(result.fat).toBe(2.5);
+  });
+
+  test('calculates nutrition for 200g (double)', () => {
+    const food = makeFood();
+    const result = calculateNutritionForQuantity(food, 200);
+    expect(result.calories).toBe(200);
+    expect(result.protein).toBe(40);
+    expect(result.carbs).toBe(20);
+    expect(result.fat).toBe(10);
+  });
+
+  test('handles null values', () => {
+    const food = makeFood({ calories: null, protein: null });
+    const result = calculateNutritionForQuantity(food, 100);
+    expect(result.calories).toBe(0);
+    expect(result.protein).toBe(0);
+  });
+});
+
+describe('calculateEquivalentQuantity', () => {
+  test('equivalent calories (same food)', () => {
+    const food = makeFood();
+    const result = calculateEquivalentQuantity(food, 100, food, 'calories');
+    expect(result).toBe(100);
+  });
+
+  test('equivalent protein between different foods', () => {
+    const chicken = makeFood({ protein: 21, calories: 165 });
+    const beef = makeFood({ protein: 26, calories: 250 });
+    const result = calculateEquivalentQuantity(chicken, 200, beef, 'protein');
+    // 200g chicken has 42g protein
+    // To get 42g protein from beef (26g/100g): (42/26)*100 ≈ 161.5
+    expect(result).toBeCloseTo(161.5, 0);
+  });
+
+  test('returns 0 when target has 0 for criterion', () => {
+    const food1 = makeFood({ calories: 100 });
+    const food2 = makeFood({ calories: 0 });
+    const result = calculateEquivalentQuantity(food1, 100, food2, 'calories');
+    expect(result).toBe(0);
+  });
+});
+
+describe('calculateMealTotals', () => {
+  test('sums all foods in a meal', () => {
+    const foods = [
+      makeMealFood({ calories: 100, protein: 20, carbs: 10, fat: 5 }),
+      makeMealFood({ id: 2, calories: 200, protein: 30, carbs: 25, fat: 8 }),
+    ];
+    const result = calculateMealTotals(foods);
+    expect(result.calories).toBe(300);
+    expect(result.protein).toBe(50);
+    expect(result.carbs).toBe(35);
+    expect(result.fat).toBe(13);
+  });
+
+  test('returns zeros for empty array', () => {
+    const result = calculateMealTotals([]);
+    expect(result.calories).toBe(0);
+    expect(result.protein).toBe(0);
+    expect(result.carbs).toBe(0);
+    expect(result.fat).toBe(0);
+  });
+
+  test('handles null values', () => {
+    const foods = [
+      makeMealFood({ calories: null, protein: null, carbs: null, fat: null }),
+    ];
+    const result = calculateMealTotals(foods);
+    expect(result.calories).toBe(0);
+    expect(result.protein).toBe(0);
+  });
+});
+
+describe('calculateDietTotals', () => {
+  test('sums all meals in a diet', () => {
+    const meals = [
+      { foods: [makeMealFood({ calories: 100, protein: 20 })] },
+      { foods: [makeMealFood({ id: 2, calories: 200, protein: 30 })] },
+    ];
+    const result = calculateDietTotals(meals);
+    expect(result.calories).toBe(300);
+    expect(result.protein).toBe(50);
+  });
+
+  test('returns zeros for empty meals', () => {
+    const result = calculateDietTotals([]);
+    expect(result.calories).toBe(0);
+  });
+});
+
+describe('calculateBMI', () => {
+  test('calculates BMI correctly', () => {
+    // 80kg, 180cm => 80 / (1.8^2) = 24.7
+    expect(calculateBMI(80, 180)).toBeCloseTo(24.7, 1);
+  });
+
+  test('returns 0 for zero height', () => {
+    expect(calculateBMI(80, 0)).toBe(0);
+  });
+});
+
+describe('getBMICategory', () => {
+  test('returns correct categories', () => {
+    expect(getBMICategory(17)).toBe('Abaixo do peso');
+    expect(getBMICategory(22)).toBe('Peso normal');
+    expect(getBMICategory(27)).toBe('Sobrepeso');
+    expect(getBMICategory(32)).toBe('Obesidade');
+  });
+});
+
+describe('calculateBMR', () => {
+  test('calculates BMR for male', () => {
+    // 80kg, 180cm, 30 years male
+    // 10*80 + 6.25*180 - 5*30 + 5 = 800 + 1125 - 150 + 5 = 1780
+    expect(calculateBMR(80, 180, 30, 'male')).toBe(1780);
+  });
+
+  test('calculates BMR for female', () => {
+    // 60kg, 165cm, 25 years female
+    // 10*60 + 6.25*165 - 5*25 - 161 = 600 + 1031.25 - 125 - 161 = 1345
+    expect(calculateBMR(60, 165, 25, 'female')).toBe(1345);
+  });
+});
+
+describe('formatNutrition', () => {
+  test('formats calories', () => {
+    expect(formatNutrition(1500, 'calories')).toBe('1500 kcal');
+    expect(formatNutrition(1500.5, 'calories')).toBe('1501 kcal');
+  });
+
+  test('formats macros', () => {
+    expect(formatNutrition(20.5, 'macros')).toBe('20.5g');
+    expect(formatNutrition(0, 'macros')).toBe('0.0g');
   });
 });

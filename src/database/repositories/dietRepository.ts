@@ -1,6 +1,6 @@
 import { getDatabase } from '../database';
 import { getNowISO } from '@/utils/dates';
-import type { Diet, Meal, MealFood, MealWithFoods, DietWithMeals } from '@/types';
+import type { Diet, Meal, MealFood, MealWithFoods, DietWithMeals, DietChangeLog } from '@/types';
 
 export const dietRepository = {
   async getActiveDiet(): Promise<DietWithMeals | null> {
@@ -57,6 +57,7 @@ export const dietRepository = {
   async createDiet(data: {
     name: string;
     calories: number | null;
+    notes?: string | null;
     startDate: string;
     meals: Array<{
       name: string;
@@ -70,6 +71,7 @@ export const dietRepository = {
         protein: number | null;
         carbs: number | null;
         fat: number | null;
+        foodId?: number | null;
       }>;
     }>;
   }): Promise<number> {
@@ -83,8 +85,12 @@ export const dietRepository = {
     );
 
     const dietResult = await db.runAsync(
-      `INSERT INTO diets (userId, name, calories, startDate, createdAt) VALUES (1, ?, ?, ?, ?)`,
-      data.name, data.calories ?? null, data.startDate, now,
+      `INSERT INTO diets (userId, name, calories, notes, startDate, createdAt) VALUES (1, ?, ?, ?, ?, ?)`,
+      data.name,
+      data.calories ?? null,
+      data.notes ?? null,
+      data.startDate,
+      now,
     );
 
     const dietId = dietResult.lastInsertRowId;
@@ -99,8 +105,9 @@ export const dietRepository = {
 
       for (const food of meal.foods) {
         await db.runAsync(
-          `INSERT INTO meal_foods (mealId, name, quantity, unit, calories, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO meal_foods (mealId, name, quantity, unit, calories, protein, carbs, fat, foodId, caloriesSnapshot, proteinSnapshot, carbsSnapshot, fatSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           mealId, food.name, food.quantity, food.unit, food.calories, food.protein, food.carbs, food.fat,
+          food.foodId ?? null, food.calories, food.protein, food.carbs, food.fat,
         );
       }
     }
@@ -108,11 +115,96 @@ export const dietRepository = {
     return dietId;
   },
 
+  async updateDiet(id: number, data: {
+    name?: string;
+    calories?: number | null;
+    notes?: string | null;
+  }): Promise<void> {
+    const db = await getDatabase();
+    const fields: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
+    if (data.calories !== undefined) { fields.push('calories = ?'); values.push(data.calories); }
+    if (data.notes !== undefined) { fields.push('notes = ?'); values.push(data.notes); }
+
+    if (fields.length === 0) return;
+
+    values.push(id);
+    await db.runAsync(`UPDATE diets SET ${fields.join(', ')} WHERE id = ?`, ...values);
+  },
+
+  async deleteDiet(id: number): Promise<void> {
+    const db = await getDatabase();
+    await db.runAsync(`DELETE FROM diets WHERE id = ?`, id);
+  },
+
+  async duplicateDiet(id: number, newName: string): Promise<number> {
+    const db = await getDatabase();
+    const now = getNowISO();
+
+    // Buscar a dieta original
+    const originalDiet = await this.getDietById(id);
+    if (!originalDiet) throw new Error('Dieta não encontrada');
+
+    // Criar nova dieta
+    const dietResult = await db.runAsync(
+      `INSERT INTO diets (userId, name, calories, notes, startDate, createdAt) VALUES (1, ?, ?, ?, ?, ?)`,
+      newName,
+      originalDiet.calories,
+      originalDiet.notes,
+      now.split('T')[0],
+      now,
+    );
+
+    const newDietId = dietResult.lastInsertRowId;
+
+    // Copiar refeições e alimentos
+    for (const meal of originalDiet.meals) {
+      const mealResult = await db.runAsync(
+        `INSERT INTO meals (dietId, name, time, "order", createdAt) VALUES (?, ?, ?, ?, ?)`,
+        newDietId, meal.name, meal.time, meal.order, now,
+      );
+
+      const newMealId = mealResult.lastInsertRowId;
+
+      for (const food of meal.foods) {
+        await db.runAsync(
+          `INSERT INTO meal_foods (mealId, name, quantity, unit, calories, protein, carbs, fat, foodId, caloriesSnapshot, proteinSnapshot, carbsSnapshot, fatSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          newMealId, food.name, food.quantity, food.unit, food.calories, food.protein, food.carbs, food.fat,
+          food.foodId, food.caloriesSnapshot, food.proteinSnapshot, food.carbsSnapshot, food.fatSnapshot,
+        );
+      }
+    }
+
+    return newDietId;
+  },
+
   async closeDiet(dietId: number, endDate: string): Promise<void> {
     const db = await getDatabase();
     await db.runAsync(
       `UPDATE diets SET endDate = ? WHERE id = ?`,
       endDate, dietId,
+    );
+  },
+
+  async getDietChangeLogs(dietId: number): Promise<DietChangeLog[]> {
+    const db = await getDatabase();
+    return db.getAllAsync<DietChangeLog>(
+      `SELECT * FROM diet_change_logs WHERE dietId = ? ORDER BY createdAt DESC`,
+      dietId,
+    );
+  },
+
+  async addChangeLog(dietId: number, type: string, description: string): Promise<void> {
+    const db = await getDatabase();
+    const now = getNowISO();
+    await db.runAsync(
+      `INSERT INTO diet_change_logs (dietId, type, description, createdAt) VALUES (?, ?, ?, ?)`,
+      dietId,
+      type,
+      description,
+      now,
     );
   },
 };

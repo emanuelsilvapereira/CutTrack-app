@@ -30,5 +30,67 @@ export function useDiet() {
     load();
   }, [load]);
 
-  return { activeDiet, allDiets, loading, error, reload: load };
+  const createDiet = useCallback(async (data: {
+    name: string;
+    calories: number | null;
+    notes?: string | null;
+    startDate: string;
+    meals: Array<{
+      name: string;
+      time: string;
+      order: number;
+      foods: Array<{
+        name: string;
+        quantity: string | null;
+        unit: string | null;
+        calories: number | null;
+        protein: number | null;
+        carbs: number | null;
+        fat: number | null;
+        foodId?: number | null;
+      }>;
+    }>;
+  }): Promise<number> => {
+    const id = await dietRepository.createDiet(data);
+    await load();
+    return id;
+  }, [load]);
+
+  const updateDiet = useCallback(async (id: number, data: {
+    name?: string;
+    calories?: number | null;
+    notes?: string | null;
+  }) => {
+    await dietRepository.updateDiet(id, data);
+    await load();
+  }, [load]);
+
+  const deleteDiet = useCallback(async (id: number) => {
+    await dietRepository.deleteDiet(id);
+    await load();
+  }, [load]);
+
+  const duplicateDiet = useCallback(async (id: number, newName: string): Promise<number> => {
+    const newId = await dietRepository.duplicateDiet(id, newName);
+    await load();
+    return newId;
+  }, [load]);
+
+  const closeDiet = useCallback(async (dietId: number, endDate: string) => {
+    await dietRepository.closeDiet(dietId, endDate);
+    await load();
+  }, [load]);
+
+  return { 
+    activeDiet, 
+    allDiets, 
+    loading, 
+    error, 
+    reload: load,
+    createDiet,
+    updateDiet,
+    deleteDiet,
+    duplicateDiet,
+    closeDiet,
+  };
 }

@@ -9,8 +9,11 @@ import { getNowISO, getLocalDateString } from '@/utils/dates';
 /**
  * Seeds the database with initial mock data if empty.
  * Only runs once — checks if user already exists.
+ * Only runs in development mode (__DEV__).
  */
 export async function seedDatabase(): Promise<void> {
+  if (!__DEV__) return; // Only seed in development
+
   const existingUser = await userRepository.getUser();
   if (existingUser) return; // Already seeded
 
@@ -18,10 +21,10 @@ export async function seedDatabase(): Promise<void> {
   const now = getNowISO();
   const today = getLocalDateString();
 
-  // Create user
+  // Create user with V2 fields
   await db.runAsync(
-    `INSERT INTO users (name, initialWeight, goalWeight, createdAt) VALUES (?, ?, ?, ?)`,
-    'Emanuel', 117.0, 90.0, now,
+    `INSERT INTO users (name, initialWeight, goalWeight, height, birthDate, goal, calorieTarget, onboardingComplete, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    'Emanuel', 117.0, 90.0, 178, '1990-01-01', 'loss', 2200, 1, now,
   );
 
   // Create weight records (last 30 days of simulated data)
@@ -164,4 +167,26 @@ export async function seedDatabase(): Promise<void> {
     `INSERT INTO diets (userId, name, calories, startDate, endDate, createdAt) VALUES (1, ?, ?, ?, ?, ?)`,
     'Dieta anterior', 2500, getLocalDateString(oldDietStart), getLocalDateString(oldDietEnd), now,
   );
+
+  // Create foods in the foods table
+  const foodsForDatabase = [
+    { name: 'Pão francês', calories: 150, protein: 5, carbs: 28, fat: 2, defaultUnit: 'unidade' },
+    { name: 'Ovos', calories: 70, protein: 6, carbs: 0.3, fat: 5, defaultUnit: 'unidade' },
+    { name: 'Cream cheese light', calories: 150, protein: 10, carbs: 5, fat: 10, defaultUnit: 'g' },
+    { name: 'Arroz', calories: 130, protein: 2.5, carbs: 28, fat: 0.3, defaultUnit: 'g' },
+    { name: 'Feijão', calories: 77, protein: 5, carbs: 14, fat: 0.3, defaultUnit: 'g' },
+    { name: 'Acém', calories: 180, protein: 20, carbs: 0, fat: 11, defaultUnit: 'g' },
+    { name: 'Whey Protein', calories: 400, protein: 80, carbs: 10, fat: 5, defaultUnit: 'g' },
+    { name: 'Banana', calories: 90, protein: 1, carbs: 23, fat: 0, defaultUnit: 'unidade' },
+    { name: 'Aveia', calories: 383, protein: 13, carbs: 66, fat: 8, defaultUnit: 'g' },
+    { name: 'Frango grelhado', calories: 165, protein: 21, carbs: 0, fat: 9, defaultUnit: 'g' },
+    { name: 'Batata doce', calories: 86, protein: 1.6, carbs: 20, fat: 0.1, defaultUnit: 'g' },
+  ];
+
+  for (const food of foodsForDatabase) {
+    await db.runAsync(
+      `INSERT INTO foods (name, calories, protein, carbs, fat, defaultUnit, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      food.name, food.calories, food.protein, food.carbs, food.fat, food.defaultUnit, now, now,
+    );
+  }
 }
