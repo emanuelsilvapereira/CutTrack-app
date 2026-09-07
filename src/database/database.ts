@@ -4,7 +4,7 @@
 
 import * as SQLite from 'expo-sqlite';
 
-const DB_NAME = 'cuttrack.db';
+const DB_NAME = 'cuttrack_v3.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -35,6 +35,12 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
 
   if (currentVersion < 1) {
     await applyMigration1(database);
+  }
+  if (currentVersion < 2) {
+    await applyMigration2(database);
+  }
+  if (currentVersion < 3) {
+    await applyMigration3(database);
   }
 }
 
@@ -129,6 +135,86 @@ async function applyMigration1(database: SQLite.SQLiteDatabase): Promise<void> {
     );
 
     INSERT INTO migrations (version, appliedAt) VALUES (1, datetime('now'));
+  `);
+}
+
+async function applyMigration2(database: SQLite.SQLiteDatabase): Promise<void> {
+  await database.execAsync(`
+    -- Novos campos no user
+    ALTER TABLE users ADD COLUMN height REAL;
+    ALTER TABLE users ADD COLUMN birthDate TEXT;
+    ALTER TABLE users ADD COLUMN goal TEXT NOT NULL DEFAULT 'loss';
+    ALTER TABLE users ADD COLUMN calorieTarget INTEGER;
+    ALTER TABLE users ADD COLUMN onboardingComplete INTEGER NOT NULL DEFAULT 0;
+
+    -- Banco de alimentos reutilizáveis
+    CREATE TABLE IF NOT EXISTS foods (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      calories REAL,
+      protein REAL,
+      carbs REAL,
+      fat REAL,
+      defaultUnit TEXT NOT NULL DEFAULT 'g',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    -- Adicionar foodId + snapshots no meal_foods
+    ALTER TABLE meal_foods ADD COLUMN foodId INTEGER REFERENCES foods(id);
+    ALTER TABLE meal_foods ADD COLUMN caloriesSnapshot REAL;
+    ALTER TABLE meal_foods ADD COLUMN proteinSnapshot REAL;
+    ALTER TABLE meal_foods ADD COLUMN carbsSnapshot REAL;
+    ALTER TABLE meal_foods ADD COLUMN fatSnapshot REAL;
+
+    -- Copiar valores existentes para snapshots
+    UPDATE meal_foods SET
+      caloriesSnapshot = calories,
+      proteinSnapshot = protein,
+      carbsSnapshot = carbs,
+      fatSnapshot = fat;
+
+    -- Substituições
+    CREATE TABLE IF NOT EXISTS food_substitutions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mealFoodId INTEGER NOT NULL,
+      alternativeFoodId INTEGER NOT NULL,
+      quantity REAL,
+      unit TEXT,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (mealFoodId) REFERENCES meal_foods(id) ON DELETE CASCADE,
+      FOREIGN KEY (alternativeFoodId) REFERENCES foods(id)
+    );
+
+    -- Notas da dieta (observações)
+    ALTER TABLE diets ADD COLUMN notes TEXT;
+
+    -- Histórico de alterações
+    CREATE TABLE IF NOT EXISTS diet_change_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      dietId INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (dietId) REFERENCES diets(id) ON DELETE CASCADE
+    );
+
+    INSERT INTO migrations (version, appliedAt) VALUES (2, datetime('now'));
+  `);
+}
+
+async function applyMigration3(database: SQLite.SQLiteDatabase): Promise<void> {
+  await database.execAsync(`
+    -- Adicionar novos campos do V3 para foods
+    ALTER TABLE foods ADD COLUMN category TEXT;
+    ALTER TABLE foods ADD COLUMN source TEXT;
+    ALTER TABLE foods ADD COLUMN sourceId TEXT;
+    ALTER TABLE foods ADD COLUMN sourceVersion TEXT;
+    ALTER TABLE foods ADD COLUMN fiber REAL;
+    ALTER TABLE foods ADD COLUMN sodium REAL;
+    ALTER TABLE foods ADD COLUMN isUserCreated INTEGER NOT NULL DEFAULT 0;
+    
+    INSERT INTO migrations (version, appliedAt) VALUES (3, datetime('now'));
   `);
 }
 

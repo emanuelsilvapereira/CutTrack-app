@@ -2,7 +2,7 @@
 // CutTrack — Pure Calculation Functions
 // ==========================================
 
-import type { WeightRecord, MealLog, ChartDataPoint } from '@/types';
+import type { WeightRecord, MealLog, ChartDataPoint, Food, MealFood, NutritionInfo, SubstitutionCriterion } from '@/types';
 
 /**
  * Calculate total weight loss from initial weight to current.
@@ -208,4 +208,133 @@ export function formatWeightChange(change: number, unit: string = 'kg'): string 
  */
 export function formatPercentage(value: number): string {
   return `${Math.round(value)}%`;
+}
+
+// ==========================================
+// CutTrack V2 — Nutrition Calculations
+// ==========================================
+
+/**
+ * Calculate nutrition for a specific quantity based on food reference values.
+ * Uses rule of three (proportion) from per-100g values.
+ */
+export function calculateNutritionForQuantity(
+  food: Food,
+  quantity: number,
+): NutritionInfo {
+  const factor = quantity / 100;
+  return {
+    calories: (food.calories ?? 0) * factor,
+    protein: (food.protein ?? 0) * factor,
+    carbs: (food.carbs ?? 0) * factor,
+    fat: (food.fat ?? 0) * factor,
+  };
+}
+
+/**
+ * Calculate equivalent quantity of target food based on original food and criterion.
+ * Used for food substitution (e.g., "how much chicken equals 150g of beef in protein?").
+ */
+export function calculateEquivalentQuantity(
+  originalFood: Food,
+  originalQuantity: number,
+  targetFood: Food,
+  criterion: SubstitutionCriterion = 'calories',
+): number | null {
+  const originalNutrition = calculateNutritionForQuantity(originalFood, originalQuantity);
+  const targetNutritionPer100g = {
+    calories: targetFood.calories ?? 0,
+    protein: targetFood.protein ?? 0,
+    carbs: targetFood.carbs ?? 0,
+    fat: targetFood.fat ?? 0,
+  };
+
+  const originalValue = originalNutrition[criterion];
+  const targetPerUnit = targetNutritionPer100g[criterion];
+
+  // If the target food has 0 of this nutrient, it's mathematically impossible to substitute
+  // based on this criterion without requiring an infinite amount of food.
+  if (!targetPerUnit || targetPerUnit <= 0) return null;
+
+  return (originalValue / targetPerUnit) * 100;
+}
+
+/**
+ * Calculate total nutrition for a list of meal foods.
+ */
+export function calculateMealTotals(foods: MealFood[]): NutritionInfo {
+  return foods.reduce(
+    (totals, food) => ({
+      calories: totals.calories + (food.calories ?? 0),
+      protein: totals.protein + (food.protein ?? 0),
+      carbs: totals.carbs + (food.carbs ?? 0),
+      fat: totals.fat + (food.fat ?? 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  );
+}
+
+/**
+ * Calculate total nutrition for all meals in a diet.
+ */
+export function calculateDietTotals(
+  meals: Array<{ foods: MealFood[] }>,
+): NutritionInfo {
+  return meals.reduce(
+    (totals, meal) => {
+      const mealTotals = calculateMealTotals(meal.foods);
+      return {
+        calories: totals.calories + mealTotals.calories,
+        protein: totals.protein + mealTotals.protein,
+        carbs: totals.carbs + mealTotals.carbs,
+        fat: totals.fat + mealTotals.fat,
+      };
+    },
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  );
+}
+
+/**
+ * Calculate BMI (Body Mass Index).
+ */
+export function calculateBMI(weightKg: number, heightCm: number): number {
+  if (heightCm <= 0) return 0;
+  const heightM = heightCm / 100;
+  return Number((weightKg / (heightM * heightM)).toFixed(1));
+}
+
+/**
+ * Get BMI category in Portuguese.
+ */
+export function getBMICategory(bmi: number): string {
+  if (bmi < 18.5) return 'Abaixo do peso';
+  if (bmi < 25) return 'Peso normal';
+  if (bmi < 30) return 'Sobrepeso';
+  return 'Obesidade';
+}
+
+/**
+ * Calculate basal metabolic rate (BMR) using Mifflin-St Jeor equation.
+ * weight in kg, height in cm, age in years.
+ */
+export function calculateBMR(
+  weight: number,
+  height: number,
+  age: number,
+  gender: 'male' | 'female' = 'male',
+): number {
+  if (gender === 'male') {
+    return Math.round(10 * weight + 6.25 * height - 5 * age + 5);
+  }
+  return Math.round(10 * weight + 6.25 * height - 5 * age - 161);
+}
+
+/**
+ * Format nutrition value with appropriate unit.
+ */
+export function formatNutrition(value: number, type: 'calories' | 'macros'): string {
+  if (type === 'calories') {
+    return `${Math.round(value)} kcal`;
+  }
+  return `${value.toFixed(1)}g`;
 }

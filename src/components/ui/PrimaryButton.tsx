@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, View } from 'react-native';
 import { useTheme } from '@/theme';
 
 interface PrimaryButtonProps {
@@ -8,6 +8,9 @@ interface PrimaryButtonProps {
   loading?: boolean;
   disabled?: boolean;
   variant?: 'filled' | 'outline';
+  style?: ViewStyle;
+  icon?: React.ReactNode;
+  textColor?: string;
 }
 
 export function PrimaryButton({
@@ -16,11 +19,16 @@ export function PrimaryButton({
   loading = false,
   disabled = false,
   variant = 'filled',
+  style,
+  icon,
+  textColor,
 }: PrimaryButtonProps) {
   const { colors, typography, radius, componentSizes } = useTheme();
 
   const isFilled = variant === 'filled';
   const isDisabled = disabled || loading;
+  
+  const resolvedTextColor = textColor || (isFilled ? colors.white : colors.primary);
 
   return (
     <TouchableOpacity
@@ -41,23 +49,27 @@ export function PrimaryButton({
               : colors.primary
             : 'transparent',
           borderWidth: isFilled ? 0 : 2,
-          borderColor: colors.primary,
+          borderColor: textColor || colors.primary,
         },
+        style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isFilled ? colors.white : colors.primary} />
+        <ActivityIndicator color={resolvedTextColor} />
       ) : (
-        <Text
-          style={[
-            typography.titleMedium,
-            {
-              color: isFilled ? colors.white : colors.primary,
-            },
-          ]}
-        >
-          {title}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {icon && <View style={{ marginRight: 8 }}>{icon}</View>}
+          <Text
+            style={[
+              typography.titleMedium,
+              {
+                color: resolvedTextColor,
+              },
+            ]}
+          >
+            {title}
+          </Text>
+        </View>
       )}
     </TouchableOpacity>
   );

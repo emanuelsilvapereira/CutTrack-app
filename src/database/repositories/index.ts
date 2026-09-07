@@ -1,5 +1,8 @@
-export { userRepository } from './userRepository';
-export { weightRepository } from './weightRepository';
-export { dietRepository } from './dietRepository';
-export { mealLogRepository } from './mealLogRepository';
-export { measurementRepository } from './measurementRepository';
+export * from './userRepository';
+export * from './weightRepository';
+export * from './dietRepository';
+export * from './mealLogRepository';
+export * from './measurementRepository';
+export * from './foodRepository';
+export * from './mealRepository';
+export * from './mealFoodRepository';

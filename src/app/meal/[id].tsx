@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,8 @@ import { useTheme } from '@/theme';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { getDatabase } from '@/database/database';
-import { mealLogRepository } from '@/database/repositories';
+import { FoodDetailsSheet } from '@/components/ui/FoodDetailsSheet';
+import { mealFoodRepository, mealLogRepository } from '@/database/repositories';
 import { getLocalDateString, formatTime } from '@/utils/dates';
 import type { Meal, MealFood, MealLog } from '@/types';
 
@@ -21,6 +22,10 @@ export default function MealDetailScreen() {
   const [log, setLog] = useState<MealLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  
+  // Sheet states
+  const [selectedFood, setSelectedFood] = useState<MealFood | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   const today = getLocalDateString();
 
@@ -67,6 +72,52 @@ export default function MealDetailScreen() {
     } finally {
       setToggling(false);
     }
+  };
+
+  const handleFoodPress = (food: MealFood) => {
+    setSelectedFood(food);
+    setSheetVisible(true);
+  };
+
+  const handleCloseSheet = () => {
+    setSheetVisible(false);
+    setSelectedFood(null);
+  };
+
+  const handleRemoveFood = async (food: MealFood) => {
+    try {
+      await mealFoodRepository.removeFood(food.id);
+      handleCloseSheet();
+      await loadData();
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível remover o alimento.');
+    }
+  };
+
+  const handleEditQuantity = async (food: MealFood, newQuantity: string) => {
+    try {
+      await mealFoodRepository.updateQuantity(food.id, newQuantity);
+      handleCloseSheet();
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', e.message || 'Não foi possível atualizar a quantidade.');
+    }
+  };
+
+  const handleSubstituteFood = (food: MealFood) => {
+    handleCloseSheet();
+    router.push({
+      pathname: '/food/substitute',
+      params: {
+        mealFoodId: food.id,
+        currentName: food.name,
+        currentCalories: food.calories,
+        currentProtein: food.protein,
+        currentCarbs: food.carbs,
+        currentFat: food.fat,
+        currentQuantity: food.quantity,
+      },
+    });
   };
 
   if (loading) {
@@ -134,8 +185,10 @@ export default function MealDetailScreen() {
         {/* Foods list */}
         <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['3xl'] }}>
           {meal.foods.map((food) => (
-            <View
+            <TouchableOpacity
               key={food.id}
+              onPress={() => handleFoodPress(food)}
+              activeOpacity={0.7}
               style={[
                 styles.foodRow,
                 {
@@ -155,12 +208,15 @@ export default function MealDetailScreen() {
                   {food.name}
                 </Text>
               </View>
-              {food.calories && (
-                <Text style={[typography.bodySmall, { color: colors.muted }]}>
-                  {food.calories} kcal
-                </Text>
-              )}
-            </View>
+              <View style={styles.foodRight}>
+                {food.calories && (
+                  <Text style={[typography.bodySmall, { color: colors.muted }]}>
+                    {food.calories} kcal
+                  </Text>
+                )}
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} style={{ marginLeft: 4 }} />
+              </View>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -223,6 +279,15 @@ export default function MealDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <FoodDetailsSheet
+        visible={sheetVisible}
+        food={selectedFood}
+        onClose={handleCloseSheet}
+        onRemove={handleRemoveFood}
+        onEditQuantity={handleEditQuantity}
+        onSubstitute={handleSubstituteFood}
+      />
     </View>
   );
 }
@@ -252,6 +317,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  foodRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   nutritionCard: {},
   nutritionMain: {
